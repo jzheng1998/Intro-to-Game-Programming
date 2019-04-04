@@ -154,22 +154,36 @@ bool Entity::CollidesWith(Entity &entity) {
 	return true;
 }
 
+struct MainMenuState {
+	void DrawText(ShaderProgram &program, int fontTexture, std::string text, float size, float spacing);
+
+	void Setup();
+	void ProcessEvents();
+	void Render();
+};
+
 struct GameState {
 	Entity player;
 	Entity enemies[MAX_ENEMIES];
 	Entity bullets[MAX_BULLETS];
+
+	void shootBullet();
+	bool contactWithSide();
+	
+	void Setup();
+	void ProcessEvents();
+	void Update(float elapsed);
+	void Render();
 };
 
 GLuint fontSheet;
 GLuint textureSheet;
 SheetSprite enemySprite, playerSprite, bulletSprite;
 GameMode mode;
-GameState state;
-Entity enemies[MAX_ENEMIES];
-Entity bullets[MAX_BULLETS];
-Entity player;
+GameState gameState;
+MainMenuState mainMenuState;
 
-void DrawText(ShaderProgram &program, int fontTexture, std::string text, float size, float spacing) {
+void MainMenuState::DrawText(ShaderProgram &program, int fontTexture, std::string text, float size, float spacing) {
 	float character_size = 1.0 / 16.0f;
 	std::vector<float> vertexData;
 	std::vector<float> texCoordData;
@@ -214,7 +228,7 @@ bool clickStart(double x, double y) {
 	return true;
 }
 
-void shootBullet() {
+void GameState::shootBullet() {
 	bullets[bulletIndex].position.x = player.position.x;
 	bullets[bulletIndex].position.y = player.position.y;
 	bullets[bulletIndex].velocity.y = 1.0f;
@@ -224,7 +238,7 @@ void shootBullet() {
 	}
 }
 
-bool contactWithSide() {
+bool GameState::contactWithSide() {
 	for (int i = 0; i < MAX_ENEMIES; i++) {
 		Entity enemy = enemies[i];
 		if (enemy.position.x + enemy.sprite.width > 1.77) {
@@ -237,25 +251,25 @@ bool contactWithSide() {
 	return false;
 }
 
-void SetupMainMenu() {
+void MainMenuState::Setup() {
 	gameOver = false;
 	DrawText(texturedProgram, fontSheet, "Space Invaders", 0.2f, 0.0f);
 	DrawText(texturedProgram, fontSheet, "Start", 0.125f, 0.0f);
 }
 
-void SetupGameLevel() {
+void GameState::Setup() {
 	enemySprite = SheetSprite(textureSheet, 423.0f / 1024.0f, 728.0f / 1024.0f, 93.0f / 1024.0f, 84.0f / 1024.0f, 0.2f);
 	playerSprite = SheetSprite(textureSheet, 211.0f / 1024.0f, 941.0f / 1024.0f, 99.0f / 1024.0f, 75.0f / 1024.0f, 0.2f);
 	bulletSprite = SheetSprite(textureSheet, 856.0f / 1024.0f, 421.0f / 1024.0f, 9.0f / 1024.0f, 54.0f / 1024.0f, 0.1f);
 
-	player.sprite = playerSprite;
-	player.position = glm::vec3(0.0f, -0.87f, 0.0f);
-	player.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+	this->player.sprite = playerSprite;
+	this->player.position = glm::vec3(0.0f, -0.87f, 0.0f);
+	this->player.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	for (int i = 0; i < MAX_BULLETS; i++) {
-		bullets[i].sprite = bulletSprite;
-		bullets[i].position = glm::vec3(-2000.0f, 0.0f, 0.0f);
-		bullets[i].velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+		this->bullets[i].sprite = bulletSprite;
+		this->bullets[i].position = glm::vec3(-2000.0f, 0.0f, 0.0f);
+		this->bullets[i].velocity = glm::vec3(0.0f, 0.0f, 0.0f);
 	}
 
 	int row = 3;
@@ -264,9 +278,9 @@ void SetupGameLevel() {
 		float position_x = -1.5f;
 		float position_y = 0.8 - 0.25 * i;
 		for (int j = i * numberOfEnemiesEachRow; j < (i + 1)*numberOfEnemiesEachRow; j++) {
-			enemies[j].sprite = enemySprite;
-			enemies[j].position = glm::vec3(position_x, position_y, 0.0f);
-			enemies[j].velocity = glm::vec3(0.25f, 0.0f, 0.0f);
+			this->enemies[j].sprite = enemySprite;
+			this->enemies[j].position = glm::vec3(position_x, position_y, 0.0f);
+			this->enemies[j].velocity = glm::vec3(0.3f, 0.0f, 0.0f);
 			position_x += 0.4f;
 		}
 	}
@@ -289,7 +303,6 @@ void Setup() {
 	fontSheet = LoadTexture("assets/font.png");
 	textureSheet = LoadTexture("assets/SpaceShooter/Spritesheet/sheet.png");
 	mode = MAIN_MENU;
-	SetupMainMenu();
 
 	projectionMatrix = glm::mat4(1.0f);
 	projectionMatrix = glm::ortho(-1.777f, 1.777f, -1.0f, 1.0f, -1.0f, 1.0f);
@@ -304,23 +317,23 @@ void Setup() {
 	glUseProgram(texturedProgram.programID);
 
 	keys = SDL_GetKeyboardState(NULL);
+
+	mainMenuState.Setup();
 }
 
-void ProcessMainMenuInput() {
+void MainMenuState::ProcessEvents() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		if (event.type == SDL_QUIT || event.type == SDL_WINDOWEVENT_CLOSE) {
 			done = true;
 		} else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == 1) {
-			if (clickStart(event.button.x, event.button.y)) {
-				mode = GAME_LEVEL;
-				SetupGameLevel();
-			}
+			mode = GAME_LEVEL;
+			gameState.Setup();
 		}
 	}
 }
 
-void ProcessGameLevelInput() {
+void GameState::ProcessEvents() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		if (event.type == SDL_QUIT || event.type == SDL_WINDOWEVENT_CLOSE) {
@@ -346,24 +359,21 @@ void ProcessGameLevelInput() {
 void ProcessEvents() {
 	switch (mode) {
 	case MAIN_MENU:
-		ProcessMainMenuInput();
+		mainMenuState.ProcessEvents();
 		break;
 	case GAME_LEVEL:
-		ProcessGameLevelInput();
+		gameState.ProcessEvents();
 		break;
 	}
 }
 
-void UpdateMainMenu(float elapsed) {
-}
-
-void UpdateGameLevel(float elapsed) {
+void GameState::Update(float elapsed) {
 	if (enemiesLeft == 0) {
 		gameOver = true;
 	}
 	if (gameOver) {
 		mode = MAIN_MENU;
-		SetupMainMenu();
+		mainMenuState.Setup();
 	}
 
 	if (!canShoot) {
@@ -415,16 +425,13 @@ void Update() {
 	lastFrameTicks = ticks;
 
 	switch (mode) {
-	case MAIN_MENU:
-		UpdateMainMenu(elapsed);
-		break;
 	case GAME_LEVEL:
-		UpdateGameLevel(elapsed);
+		gameState.Update(elapsed);
 		break;
 	}
 }
 
-void RenderMainMenu() {
+void MainMenuState::Render() {
 	glm::mat4 modelMatrix = glm::mat4(1.0f);
 	modelMatrix = glm::translate(modelMatrix, glm::vec3(-1.3f, 0.3f, 0.0f));
 	texturedProgram.SetModelMatrix(modelMatrix);
@@ -436,7 +443,7 @@ void RenderMainMenu() {
 	DrawText(texturedProgram, fontSheet, "Start", 0.125f, 0.0f);
 }
 
-void RenderGameLevel() {
+void GameState::Render() {
 	player.Render(texturedProgram);
 	for (int i = 0; i < MAX_BULLETS; i++) {
 		bullets[i].Render(texturedProgram);
@@ -450,10 +457,10 @@ void Render() {
 	glClear(GL_COLOR_BUFFER_BIT);
 	switch (mode) {
 	case MAIN_MENU:
-		RenderMainMenu();
+		mainMenuState.Render();
 		break;
 	case GAME_LEVEL:
-		RenderGameLevel();
+		gameState.Render();
 		break;
 	}
 	SDL_GL_SwapWindow(displayWindow);
